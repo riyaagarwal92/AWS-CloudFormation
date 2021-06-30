@@ -1,0 +1,279 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: Web Tier for Star Wars App which consists of an external ALB, Web Server, App Server, Queue Server and Windows Server.
+
+Resources:
+    SW{{ Environment }}{{ Region }}NotificationTopic:
+      Type: 'AWS::SNS::Topic'
+      Properties:
+        Subscription:
+          - Endpoint: {{ OperatorEmail }}
+            Protocol: email
+
+
+  # External ALB for Web Tier
+    SW{{ Environment }}{{ Region }}ALB:
+      Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+      Properties:
+        SecurityGroups: [{{ SWELBSGID }}]
+        Scheme: internet-facing
+        Name : SW-{{ TagEnvironment }}-{{ TagRegion }}-ALB
+        Subnets:
+          - {{ PublicSubnet1 }}
+          - {{ PublicSubnet2 }}
+        Tags:
+          - Key: Name
+            Value: SW-{{ TagEnvironment }}-{{ TagRegion }}-ALB
+          - Key: Tr:environment-type
+            Value: {{ Environment_type }}
+          - Key: Tr:project-name
+            Value: Star Wars
+          - Key: Tr:service-name
+            Value: Web-App
+
+
+
+###### Target Group for Web Servers
+
+
+
+    SWWeb{{ Environment }}{{ Region }}ALBTargetGroup1:
+      Type: AWS::ElasticLoadBalancingV2::TargetGroup
+      Properties:
+        HealthCheckIntervalSeconds: 60
+        HealthCheckTimeoutSeconds: 5
+        HealthyThresholdCount: 3
+        Port: 9400
+        Protocol: HTTP
+        Name: SW-Web-1-{{ TagEnvironment }}-{{ TagRegion }}-TG
+        UnhealthyThresholdCount: 5
+        VpcId: {{ VpcId }}
+        Targets:
+          - Id: !Ref SWWeb{{ Environment }}{{ Region }}Instance1
+
+
+
+###### Target Groups for App Servers
+
+
+    SWApp{{ Environment }}{{ Region }}ALBTargetGroup1:
+      Type: AWS::ElasticLoadBalancingV2::TargetGroup
+      Properties:
+        HealthCheckIntervalSeconds: 60
+        HealthCheckTimeoutSeconds: 5
+        HealthyThresholdCount: 3
+        Port: 9403
+        Protocol: HTTP
+        Name: SW-App-1-{{ TagEnvironment }}-{{ TagRegion }}-TG
+        UnhealthyThresholdCount: 5
+        VpcId: {{ VpcId }}
+        Targets:
+          - Id: !Ref SWApp{{ Environment }}{{ Region }}Instance1
+
+
+    SWApp{{ Environment }}{{ Region }}ALBTargetGroup2:
+      Type: AWS::ElasticLoadBalancingV2::TargetGroup
+      Properties:
+        HealthCheckIntervalSeconds: 60
+        HealthCheckTimeoutSeconds: 5
+        HealthyThresholdCount: 3
+        Port: 9401
+        Protocol: HTTP
+        Name: SW-App-2-{{ TagEnvironment }}-{{ TagRegion }}-TG
+        UnhealthyThresholdCount: 5
+        VpcId: {{ VpcId }}
+        Targets:
+          - Id: !Ref SWApp{{ Environment }}{{ Region }}Instance1
+
+
+
+  #ALB Listener
+    SW{{ Environment }}{{ Region }}ALBListener1:
+      Type: AWS::ElasticLoadBalancingV2::Listener
+      Properties:
+        DefaultActions:
+          - Type: forward
+            TargetGroupArn: !Ref SWApp{{ Environment }}{{ Region }}ALBTargetGroup1
+        LoadBalancerArn: !Ref SW{{ Environment }}{{ Region }}ALB
+        Port: 80
+        Protocol: HTTP
+
+
+  # Listener Rule for Web server
+
+    ListenerRuleWeb1:
+      Type: AWS::ElasticLoadBalancingV2::ListenerRule
+      Properties:
+        Actions:
+        - Type: forward
+          TargetGroupArn: !Ref SWWeb{{ Environment }}{{ Region }}ALBTargetGroup1
+        Conditions:
+        - Field: host-header
+          Values:
+          - "SW-service3-use1-aws.abc.com"
+        ListenerArn:
+          Ref: SW{{ Environment }}{{ Region }}ALBListener1
+        Priority: 1
+
+
+######Listener Rules for App Servers
+
+
+
+    ListenerRuleApp1:
+      Type: AWS::ElasticLoadBalancingV2::ListenerRule
+      Properties:
+        Actions:
+        - Type: forward
+          TargetGroupArn:
+            Ref: SWApp{{ Environment }}{{ Region }}ALBTargetGroup1
+        Conditions:
+        - Field: host-header
+          Values:
+          - "SW-service1-use1-aws.abc.com"
+        ListenerArn:
+          Ref: SW{{ Environment }}{{ Region }}ALBListener1
+        Priority: 2
+
+
+    ListenerRuleApp2:
+      Type: AWS::ElasticLoadBalancingV2::ListenerRule
+      Properties:
+        Actions:
+        - Type: forward
+          TargetGroupArn:
+            Ref: SWApp{{ Environment }}{{ Region }}ALBTargetGroup2
+        Conditions:
+        - Field: host-header
+          Values:
+          - "SW-service2-use1-aws.abc.com"
+        ListenerArn:
+          Ref: SW{{ Environment }}{{ Region }}ALBListener1
+        Priority: 3
+
+
+#### Web Instance
+
+    SWWeb{{ Environment }}{{ Region }}Instance1:
+      Type: AWS::EC2::Instance
+      Properties:
+        BlockDeviceMappings:
+          - DeviceName: /dev/sda1
+            Ebs:
+              VolumeSize: 50
+              VolumeType: gp2
+          - DeviceName: xvdf
+            Ebs:
+              VolumeSize: 50
+              VolumeType: gp2
+              Encrypted: true
+        DisableApiTermination: False
+        EbsOptimized: False
+        ImageId: {{ WinImageId }}
+        InstanceInitiatedShutdownBehavior: stop
+        InstanceType: {{ WebInstanceType }}
+        IamInstanceProfile: {{ IamInstanceProfile }}
+        Monitoring: True
+        SubnetId: {{ PrivateSubnet1 }}
+        SecurityGroupIds:
+          - {{ SWWebSGID }}
+        SourceDestCheck: True
+        UserData: !Base64
+            Fn::Join:
+            - "\n"
+            - - <powershell>
+              - Add-WindowsFeature -Name Web-Server -IncludeManagementTools
+              - </powershell>
+        Tags:
+          - Key: Name
+            Value: SW-Web-{{ TagEnvironment }}-{{ TagRegion }}-Instance1
+          - Key: Tr:environment-type
+            Value: {{ Environment_type }}
+          - Key: Tr:project-name
+            Value: Star Wars
+          - Key: Tr:service-name
+            Value: Web-App
+
+
+##### App Instance
+
+
+
+    SWApp{{ Environment }}{{ Region }}Instance1:
+      Type: AWS::EC2::Instance
+      Properties:
+        BlockDeviceMappings:
+          - DeviceName: /dev/sda1
+            Ebs:
+              VolumeSize: 50
+              VolumeType: gp2
+          - DeviceName: xvdf
+            Ebs:
+              VolumeSize: 50
+              VolumeType: gp2
+              Encrypted: true
+        DisableApiTermination: False
+        EbsOptimized: False
+        ImageId: {{ WinImageId }}
+        InstanceInitiatedShutdownBehavior: stop
+        InstanceType: {{ AppInstanceType }}
+        IamInstanceProfile: {{ IamInstanceProfile }}
+        Monitoring: True
+        SubnetId: {{ PrivateSubnet1 }}
+        SecurityGroupIds:
+          - {{ SWAppSGID }}
+        SourceDestCheck: True
+        UserData: !Base64
+            Fn::Join:
+            - "\n"
+            - - <powershell>
+              - Add-WindowsFeature -Name Web-Server -IncludeManagementTools
+              - </powershell>
+        Tags:
+          - Key: Name
+            Value: SW-App-{{ TagEnvironment }}-{{ TagRegion }}-Instance1
+          - Key: Tr:environment-type
+            Value: {{ Environment_type }}
+          - Key: Tr:project-name
+            Value: Star Wars
+          - Key: Tr:service-name
+            Value: Web-App
+
+
+
+######### ElastiCache
+
+
+
+    SWElasticSubnetGroup:
+      Type: 'AWS::ElastiCache::SubnetGroup'
+      Properties:
+        Description: "Cache Subnet Group"
+        SubnetIds:
+          - {{ PrivateSubnet1 }}
+          - {{ PrivateSubnet2 }}
+
+    SWCacheReplicationGroup:
+      Type: 'AWS::ElastiCache::ReplicationGroup'
+      Properties:
+        ReplicationGroupDescription: "Redis Cache non clusterd mode"
+        Engine: "redis"
+        CacheNodeType: "cache.r5.large"
+        AutoMinorVersionUpgrade: "true"
+        AutomaticFailoverEnabled: "true"
+        CacheSubnetGroupName: !Ref SWElasticSubnetGroup
+        SecurityGroupIds:
+          - {{ ElasticCacheSG }}
+        EngineVersion: "5.0.3"
+        PreferredMaintenanceWindow: "wed:09:25-wed:22:30"
+        PreferredCacheClusterAZs:
+          - "us-east-1a"
+          - "us-east-1c"
+        NumCacheClusters: 2
+
+
+Outputs:
+    SW{{ Environment }}{{ Region }}ALB:
+      Description: The App ALB's DNS
+      Value: !GetAtt SW{{ Environment }}{{ Region }}ALB.DNSName
+      Export:
+        Name: SW-{{ TagEnvironment }}-{{ TagRegion }}-ALB

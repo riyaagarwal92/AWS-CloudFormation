@@ -1,0 +1,22 @@
+{
+	"OperatorEmail": "xyz@abc.com",
+	"VpcId": "vpc-123",
+	"VpcCidr": "0.0.0.0/0",
+	"PrivateSubnet1": "subnet-1234",
+	"PrivateSubnet2": "subnet-4567",
+	"PublicSubnet1": "subnet-8910",
+	"PublicSubnet2": "subnet-1112",
+	"GLMELBSGID":"sg-1234",
+	"GLMWebSGID":"sg-5678",
+	"GLMAppSGID":"sg-9101",
+	"ElasticCacheSG":"sg-6780",
+	"WebInstanceType": "m5.2xlarge",
+	"AppInstanceType": "m5.2xlarge",
+	"WinImageId": "ami-7890",
+	"IamInstanceProfile": "sw-ec2-instance-profile",
+	"Region": "USEast1",
+	"Environment": "DEV",
+	"TagRegion": "useast-1",
+	"TagEnvironment": "dev",
+	"Environment_type": "Development"
+}
